@@ -1,9 +1,11 @@
-import numpy as np
+import cv2
 
 
-def make_front_view(cloud) -> np.ndarray:
-    pass
+def load_image(path):
+    img = cv2.imread(path)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    return img
 
 
-def make_bev_view(cloud) -> np.ndarray:
-    pass
+def normalize(old_min, old_max, new_min, new_max, val):
+    return (val - old_min) / (old_max - old_min) * (new_max - new_min) + new_min
