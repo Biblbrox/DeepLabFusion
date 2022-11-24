@@ -1,7 +1,9 @@
 import os.path
 
+import cv2
 import numpy as np
 import open3d as o3d
+from matplotlib import cm
 
 from utils import image_utils
 
@@ -16,10 +18,46 @@ CLOUD_TYPES = [
 ]
 
 
-def make_front_proj(cloud, width, height, intrinsic, extrinsic):
-    projection = cloud.project_to_rgbd_image(width, height, intrinsic, extrinsic,
-                                             depth_max=10000)
-    return projection
+def np_to_o3d_cloud(np_cloud: np.array) -> o3d.t.geometry.PointCloud:
+    device = o3d.core.Device("CPU:0")
+    dtype = o3d.core.float32
+
+    intensity = np_cloud[:, 3].flatten()
+    points = np_cloud[:, :3]
+    cloud = o3d.t.geometry.PointCloud(device)
+    cloud.point.positions = o3d.core.Tensor(np.asarray(points), dtype, device)
+    cloud.point.intensities = o3d.core.Tensor(np.asarray(intensity), dtype, device)
+
+    intensity = cloud.point.intensities.numpy()
+    max_tot = np.max(intensity)
+    source_attribute = intensity / max_tot
+    colors_map = cm.get_cmap('jet', 256)
+    source_colors = colors_map(source_attribute)
+    cloud.point.colors = o3d.core.Tensor(np.asarray(source_colors[:, :3]), dtype)
+
+    return cloud
+
+
+def o3d_cloud_to_np(cloud: o3d.t.geometry.PointCloud):
+    pass
+
+
+def o3d_rgbd_to_np(cloud: o3d.t.geometry.PointCloud):
+    pass
+
+
+def make_front_proj(cloud: np.array, width, height, intrinsic, extrinsic) -> np.array:
+    projection: o3d.t.geometry.RGBDImage = np_to_o3d_cloud(cloud).project_to_rgbd_image(width, height, intrinsic, extrinsic,
+                                                              depth_max=10000, depth_scale=1)
+    intensity = projection.color.as_tensor().numpy()
+    depth = np.log(np.maximum(0.0000001, projection.depth.as_tensor().numpy()))
+    #depth = cv2.absdiff(depth, float(np.max(depth)))
+    #depth = np.reshape(depth, (depth.shape[0], depth.shape[1], 1))
+    front = np.zeros((depth.shape[0], depth.shape[1], 2), dtype=np.float32)
+    front[:, :, 0] = intensity[:, :, 0]
+    front[:, :, 1] = depth[:, :, 0]
+
+    return front,  projection.color.as_tensor().numpy()
 
 
 def transform_cloud(cloud, transform):
@@ -62,12 +100,9 @@ def project_to_image(image: np.array, cloud: np.array, projection_mat: np.array,
     #    assert 3 <= cloud.shape[0] <= 8
     cloud = np.reshape(cloud, (cloud.shape[1], cloud.shape[0]))
     cloud = np.delete(cloud, 1, 0)
-    print(cloud.shape)
     projection = np.zeros(image.shape)
     u, v, depth = cam2image(cloud, [])
-    print(u.shape)
-    print(v.shape)
-    print(depth.shape)
+
 
     return projection
 
@@ -105,38 +140,36 @@ def filter_roi_cloud(cloud: o3d.t.geometry.PointCloud, roi):
     return cloud
 
 
-def make_bev_color(cloud_: o3d.t.geometry.PointCloud, resolution, height_, width_, roi):
+def make_bev_color(cloud_: np.array, resolution, height_, width_, roi):
     height = height_ + 1
     width = width_ + 1
 
     # Discretize Feature Map
-    cloud: o3d.t.geometry.PointCloud = cloud_.clone()
+    cloud = cloud_.copy()
 
-    points = cloud.point.positions.numpy()
-    points = np.c_[points, cloud.point.colors.numpy()]
-    points = filter_roi_cloud(points, roi)
-    points[:, 0] = np.int_(np.floor(points[:, 0] / resolution))
-    points[:, 1] = np.int_(np.floor(points[:, 1] / resolution) + width / 2)
+    cloud = filter_roi_cloud(cloud, roi)
+    cloud[:, 0] = np.int_(np.floor(cloud[:, 0] / resolution))
+    cloud[:, 1] = np.int_(np.floor(cloud[:, 1] / resolution) + width / 2)
 
     # Get indices of unique values
-    _, indices = np.unique(points[:, 0:2], axis=0, return_index=True)
+    _, indices = np.unique(cloud[:, 0:2], axis=0, return_index=True)
 
     # Intensity Map & DensityMap
-    r_map = np.zeros((height, width))
-    g_map = np.zeros((height, width))
-    b_map = np.zeros((height, width))
+    r_map = np.zeros((height, width), dtype=np.float32)
+    g_map = np.zeros((height, width), dtype=np.float32)
+    b_map = np.zeros((height, width), dtype=np.float32)
 
     _, indices, counts = np.unique(
-        points[:, 0:2], axis=0, return_index=True, return_counts=True
+        cloud[:, 0:2], axis=0, return_index=True, return_counts=True
     )
-    cloud_top = points[indices]
+    cloud_top = cloud[indices]
 
     r_map[np.int_(cloud_top[:, 0]), np.int_(cloud_top[:, 1])] = cloud_top[:, 3]
     g_map[np.int_(cloud_top[:, 0]), np.int_(cloud_top[:, 1])] = cloud_top[:, 4]
     b_map[np.int_(cloud_top[:, 0]), np.int_(cloud_top[:, 1])] = cloud_top[:, 5]
 
     # Fill channels
-    bev = np.zeros((height - 1, width - 1, 3))
+    bev = np.zeros((height - 1, width - 1, 3), dtype=np.float32)
     bev[:, :, 0] = r_map[:height_, :width_]
     bev[:, :, 1] = g_map[:height_, :width_]
     bev[:, :, 2] = b_map[:height_, :width_]
@@ -146,30 +179,28 @@ def make_bev_color(cloud_: o3d.t.geometry.PointCloud, resolution, height_, width
     return bev
 
 
-def make_bev_height_intensity(cloud_: o3d.t.geometry.PointCloud, resolution, height_, width_, roi):
+def make_bev_height_intensity(cloud_: np.array, resolution, height_, width_, roi):
     height = height_ + 1
     width = width_ + 1
 
     # Discretize Feature Map
-    cloud: o3d.t.geometry.PointCloud = cloud_.clone()
+    cloud = cloud_.copy()
 
-    points = cloud.point.positions.numpy()
-    points = np.c_[points, cloud.point.intensities.numpy()]
-    points = filter_roi_cloud(points, roi)
-    points[:, 0] = np.int_(np.floor(points[:, 0] / resolution))
-    points[:, 1] = np.int_(np.floor(points[:, 1] / resolution) + width / 2)
+    cloud = filter_roi_cloud(cloud, roi)
+    cloud[:, 0] = np.int_(np.floor(cloud[:, 0] / resolution))
+    cloud[:, 1] = np.int_(np.floor(cloud[:, 1] / resolution) + width / 2)
 
     # Get indices of unique values
-    _, indices = np.unique(points[:, 0:2], axis=0, return_index=True)
+    _, indices = np.unique(cloud[:, 0:2], axis=0, return_index=True)
 
     # Intensity Map & DensityMap
     intensity_map = np.zeros((height, width))
     height_map = np.zeros((height, width))
 
     _, indices, counts = np.unique(
-        points[:, 0:2], axis=0, return_index=True, return_counts=True
+        cloud[:, 0:2], axis=0, return_index=True, return_counts=True
     )
-    cloud_top = points[indices]
+    cloud_top = cloud[indices]
 
     intensity_map[np.int_(cloud_top[:, 0]), np.int_(cloud_top[:, 1])] = cloud_top[:, 3]
     height_map[np.int_(cloud_top[:, 0]), np.int_(cloud_top[:, 1])] = cloud_top[:, 2]
