@@ -23,7 +23,6 @@ import utils.visualization as vis
 
 
 def estimate_noise(image):
-
     total_noise = 0
     for ch in range(image.shape[2]):
         I = image[:, :, ch]
@@ -111,7 +110,7 @@ def test():
 
     cloud, img = dataset[0]
 
-    shape = (7, 3)
+    shape = (9, 3)
     fig, ax = plt.subplots(shape[0], shape[1], figsize=(13, 13), facecolor='white')
     sub = plt.subplot2grid(shape, (0, 0), colspan=3)
     sub.set_title("Original")
@@ -126,6 +125,15 @@ def test():
     front_base_cloud = fused_front['base_cloud']
     front_detail_cloud = fused_front['detail_cloud']
     front_fused_base = fused_front['fused_base']
+    front_fused_detail = fused_front['fused_detail']
+
+    # map1 = orig_map1[0, :, :]
+    # map2 = orig_map2[0, :, :]
+
+    # for ch in range(1, orig_map1.shape[0]):
+    #    map1 += orig_map1[ch, :, :]
+    #    map2 += orig_map2[ch, :, :]
+
     print(f"Original image noise: {estimate_noise(img)}")
     print(f"Original front cloud noise: {estimate_noise(front)}")
     print(f"Fused base noise: {estimate_noise(front_fused_base)}")
@@ -133,6 +141,7 @@ def test():
     bev_base_cloud = fused_bev['base_cloud']
     bev_detail_cloud = fused_bev['detail_cloud']
     bev_fused_base = fused_bev['fused_base']
+    bev_fused_detail = fused_bev['fused_detail']
 
     bev = fused_bev['bev']
     bev_color = fused_bev['bev_color']
@@ -177,7 +186,7 @@ def test():
     sub = plt.subplot2grid(shape, (4, 2), colspan=1)
     sub.imshow(front_fused_base)
     sub.set_title("Front cloud fused with image (base)")
-    cv2.imwrite(f"{path}/front_fused_with_image.png",
+    cv2.imwrite(f"{path}/front_fused_with_image_base.png",
                 255 * cv2.cvtColor(front_fused_base.astype('float32'), cv2.COLOR_RGB2BGR))
 
     sub = plt.subplot2grid(shape, (5, 0), colspan=1)
@@ -203,8 +212,29 @@ def test():
     sub = plt.subplot2grid(shape, (6, 2), colspan=1)
     sub.imshow(bev_fused_base)
     sub.set_title("Bev cloud fused with image (base)")
-    cv2.imwrite(f"{path}/bev_fused_with_image.png",
+    cv2.imwrite(f"{path}/bev_fused_with_image_base.png",
                 255 * cv2.cvtColor(bev_fused_base.astype('float32'), cv2.COLOR_RGB2BGR))
+
+    sub = plt.subplot2grid(shape, (7, 0), colspan=3)
+    print(front_fused_detail.shape)
+    front_fused_detail = np.reshape(front_fused_detail, (
+    front_fused_detail.shape[2], front_fused_detail.shape[1], front_fused_detail.shape[0]))
+    sub.imshow(front_fused_detail)
+    sub.set_title("Front fused detail")
+    cv2.imwrite(f"{path}/front_fused_with_image_detail.png",
+                255 * cv2.cvtColor(front_fused_detail.astype('float32'), cv2.COLOR_RGB2BGR))
+
+    sub = plt.subplot2grid(shape, (8, 0), colspan=3)
+    bev_fused_detail = np.reshape(bev_fused_detail, (
+        bev_fused_detail.shape[2], bev_fused_detail.shape[1], bev_fused_detail.shape[0]))
+    sub.imshow(bev_fused_detail)
+    sub.set_title("Bev cloud fused with image (detail)")
+    cv2.imwrite(f"{path}/bev_fused_with_image_detail.png",
+                255 * cv2.cvtColor(bev_fused_detail.astype('float32'), cv2.COLOR_RGB2BGR))
+
+    # sub = plt.subplot2grid(shape, (7, 1), colspan=1)
+    # sub.imshow(map2)
+    # sub.set_title("Feature map2")
 
     plt.tight_layout()
     plt.show()
