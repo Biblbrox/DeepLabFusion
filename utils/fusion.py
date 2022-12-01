@@ -7,16 +7,32 @@ from scipy import signal, ndimage
 import open3d as o3d
 import numpy.linalg as lin
 import scipy.optimize as opt
+
+from layer import Layer
 from utils.cloud_utils import make_bev_color, make_bev_height_intensity, make_front_proj
+from torchvision.models.feature_extraction import create_feature_extractor, get_graph_node_names
 from utils.cloud_utils import np_to_o3d_cloud
 import segmentation_models_pytorch as smp
 import torchvision.models as models
+from torchviz import make_dot
+from torchsummary import summary
+
+from utils.math import block_mean
 
 
 def to01(image):
     image += np.abs(np.min(image))
     image *= 1.0 / np.max(image)
     return image
+
+
+def get_layers(model):
+    layers = np.array([])
+    for name, m in model.named_modules():
+        layers = np.append(layers, name)
+
+    layers = [layer for layer in layers if not len(layer) == 0]
+    return layers
 
 
 class Decomposer:
@@ -80,23 +96,121 @@ class DetailFusion(nn.Module):
 
     def __init__(self, img_det1: np.array, img_det2: np.array):
         super(DetailFusion, self).__init__()
+
+        self.np_img1 = np.reshape(img_det1, (img_det1.shape[2], img_det1.shape[1], img_det1.shape[0]))
+        self.np_img2 = np.reshape(img_det2, (img_det2.shape[2], img_det2.shape[1], img_det2.shape[0]))
+
         self.transform = torchvision.transforms.Compose([
             torchvision.transforms.ToTensor()
         ])
         self.encoder = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.IMAGENET1K_V1)
+        self.encoder = self.encoder.to('cuda')
 
         tensor_shape = (img_det1.shape[1], img_det1.shape[0], img_det1.shape[2])
         self.img_det1, self.img_det2 = np.reshape(img_det1, tensor_shape), np.reshape(img_det2, tensor_shape)
         self.img_det1, self.img_det2 = self.transform(self.img_det1), self.transform(self.img_det2)
 
+        graph_nodes = get_graph_node_names(self.encoder)[0]
+        return_nodes = {
+            f'{layer}': f'{layer}' for layer in graph_nodes[1:49]
+        }
+        self.feature_extractor = create_feature_extractor(self.encoder, return_nodes)
+
+    def multi_layer_fusion(self, feature_maps1, feature_maps2):
+        assert (feature_maps1.shape == feature_maps2.shape)
+
+        res_map1 = res_map2 = np.array([])
+        for layer1, layer2 in zip(feature_maps1, feature_maps2):
+            Ci1 = np.linalg.norm(layer1.feature_map, axis=1, ord=1)
+            Ci1 = np.reshape(Ci1, (Ci1.shape[1], Ci1.shape[2]))
+            res_map1 = np.append(res_map1, [Layer(Ci1)])
+
+            Ci2 = np.linalg.norm(layer2.feature_map, axis=1, ord=1)
+            Ci2 = np.reshape(Ci2, (Ci2.shape[1], Ci2.shape[2]))
+            res_map2 = np.append(res_map2, [Layer(Ci2)])
+
+        block_size = 1
+        weight_maps1 = np.array([])
+        weight_maps2 = np.array([])
+        for i in range(np.size(res_map1)):
+            # TODO: check this
+            old_shape = res_map1[i].shape
+            res_map1[i].feature_map = block_mean(res_map1[i].feature_map, block_size)
+            res_map2[i].feature_map = block_mean(res_map2[i].feature_map, block_size)
+            assert (old_shape == res_map1[i].shape)
+
+            # Apply softmax
+            weight_map = np.zeros((2, res_map1[i].shape[0], res_map1[i].shape[1]))
+            weight_map[0, :, :] = res_map1[i].feature_map
+            weight_map[1, :, :] = res_map2[i].feature_map
+            softmax = torch.nn.Softmax(dim=0)
+            weight_map = np.reshape(weight_map, (weight_map.shape[1], weight_map.shape[2], weight_map.shape[0]))
+            weight_map = torchvision.transforms.ToTensor()(weight_map)
+            weight_map = softmax(weight_map)
+            weight_map1 = weight_map[0, :, :]
+            weight_map2 = weight_map[1, :, :]
+
+            # Upsampling feature maps to original size
+            # Add minibatch size.
+            weight_map1 = weight_map1[None, :]
+            weight_map2 = weight_map2[None, :]
+            weight_map1 = weight_map1[None, :]
+            weight_map2 = weight_map2[None, :]
+
+            # Upsample
+            upsample = torch.nn.Upsample(size=(self.img_det1.shape[1], self.img_det1.shape[2]))
+            weight_map1 = upsample(weight_map1)
+            weight_map2 = upsample(weight_map2)
+
+            weight_maps1 = np.append(weight_maps1, [Layer(weight_map1.cpu().numpy())])
+            weight_maps2 = np.append(weight_maps2, [Layer(weight_map2.cpu().numpy())])
+
+        fused = np.array([])
+        for weight_map1, weight_map2 in zip(weight_maps1, weight_maps2):
+            w1 = weight_map1.feature_map
+            w1 = np.reshape(w1, (w1.shape[1], w1.shape[2], w1.shape[3]))
+            w2 = weight_map2.feature_map
+            w2 = np.reshape(w2, (w2.shape[1], w2.shape[2], w2.shape[3]))
+
+            #print(w1.shape)
+            #print(self.np_img1.shape)
+            # TODO: make more accurate multiplication
+            # assert(w1.shape == self.np_img1.shape)
+
+            fused1 = w1 * self.np_img1
+            fused2 = w2 * self.np_img2
+            fused = np.append(fused, [Layer(fused1 + fused2)])
+
+        final_map = fused[0].feature_map
+        for layer in fused:
+            final_map = np.maximum(final_map, layer.feature_map)
+
+        final_map = to01(final_map)
+        print(final_map.shape)
+
+        return final_map
+
     def forward(self):
         input1 = self.img_det1[None]
         input2 = self.img_det2[None]
 
-        map1 = self.encoder(input1)
-        map2 = self.encoder(input2)
+        input1 = input1.to('cuda')
+        input2 = input2.to('cuda')
 
-        return map1, map2
+        map1 = self.feature_extractor(input1)
+        map2 = self.feature_extractor(input2)
+        #print(f"Before feature extractor: {input1}, after: {map1}")
+
+        feature_maps1 = np.array([])
+        feature_maps2 = np.array([])
+        for _, layer in map1.items():
+            feature_maps1 = np.append(feature_maps1, [Layer(layer.cpu().numpy())])
+        for _, layer in map2.items():
+            feature_maps2 = np.append(feature_maps2, [Layer(layer.cpu().numpy())])
+
+        detail_fused = self.multi_layer_fusion(feature_maps1, feature_maps2)
+
+        return detail_fused
 
 
 class BevImageFusion(nn.Module):
@@ -131,13 +245,15 @@ class BevImageFusion(nn.Module):
         base_cloud = add_channel(base_cloud)
         detail_cloud = add_channel(detail_cloud)
         fused_base = fuse_base(base_cloud, base_img)
+        fused_detail = DetailFusion(detail_cloud, detail_img)()
 
         return {
             'bev': bev,
             'bev_color': bev_color,
             'base_cloud': base_cloud,
             'detail_cloud': detail_cloud,
-            'fused_base': fused_base
+            'fused_base': fused_base,
+            'fused_detail': fused_detail
         }
 
 
@@ -159,8 +275,7 @@ class FrontImageFusion(nn.Module):
         fused_base = fuse_base(base_cloud, base_img)
 
         detail_fusion = DetailFusion(detail_img, detail_cloud)
-        res = detail_fusion()
-        print(res)
+        fused_detail = detail_fusion()
 
         return {
             'front': front,
@@ -169,7 +284,8 @@ class FrontImageFusion(nn.Module):
             'detail_image': detail_img,
             'base_cloud': base_cloud,
             'detail_cloud': detail_cloud,
-            'fused_base': fused_base
+            'fused_base': fused_base,
+            'fused_detail': fused_detail
         }
 
 
