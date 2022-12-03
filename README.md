@@ -52,12 +52,12 @@ BEV (Intensity channel):
 
 ## Base decomposition
 According to cited paper, base decomposition contains two equations:
-$$
+```math
 \begin{align*}
     I_b &= \underset{I_b}{\arg\max} ||I - I^b||_F^2 + \lambda\left(||g_x * I^b||_F^2 + ||g_y * I^b||_F^2\right) \\
     I_d &= I - I_b
 \end{align*}
-$$
+```
 
 Front fusion (Base part):
 
