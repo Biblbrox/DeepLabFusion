@@ -48,11 +48,9 @@ def o3d_rgbd_to_np(cloud: o3d.t.geometry.PointCloud):
 
 def make_front_proj(cloud: np.array, width, height, intrinsic, extrinsic) -> np.array:
     projection: o3d.t.geometry.RGBDImage = np_to_o3d_cloud(cloud).project_to_rgbd_image(width, height, intrinsic, extrinsic,
-                                                              depth_max=10000, depth_scale=1)
+                                                              depth_max=10000)
     intensity = projection.color.as_tensor().numpy()
     depth = np.log(np.maximum(0.0000001, projection.depth.as_tensor().numpy()))
-    #depth = cv2.absdiff(depth, float(np.max(depth)))
-    #depth = np.reshape(depth, (depth.shape[0], depth.shape[1], 1))
     front = np.zeros((depth.shape[0], depth.shape[1], 2), dtype=np.float32)
     front[:, :, 0] = intensity[:, :, 0]
     front[:, :, 1] = depth[:, :, 0]

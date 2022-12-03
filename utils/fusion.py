@@ -57,10 +57,12 @@ class Decomposer:
         conv = to01(conv)
         return conv
 
-    def __call__(self, image: np.array):
+    def __call__(self, image_: np.array):
+        image = image_.copy()
         # Obtain base part
         channels = image.shape[2]
         if np.max(image) > 1.0:
+            # image = to01(image)
             image *= 1.0 / np.max(image)
 
         base = np.zeros((image.shape[0], image.shape[1], channels), dtype=image.dtype)
@@ -96,9 +98,11 @@ class DetailFusion(nn.Module):
 
     def __init__(self, img_det1: np.array, img_det2: np.array):
         super(DetailFusion, self).__init__()
+        img1 = img_det1.copy()
+        img2 = img_det2.copy()
 
-        self.np_img1 = np.reshape(img_det1, (img_det1.shape[2], img_det1.shape[1], img_det1.shape[0]))
-        self.np_img2 = np.reshape(img_det2, (img_det2.shape[2], img_det2.shape[1], img_det2.shape[0]))
+        self.np_img1 = np.reshape(img1, (img1.shape[2], img1.shape[1], img1.shape[0]))
+        self.np_img2 = np.reshape(img2, (img2.shape[2], img2.shape[1], img2.shape[0]))
 
         self.transform = torchvision.transforms.Compose([
             torchvision.transforms.ToTensor()
@@ -106,8 +110,8 @@ class DetailFusion(nn.Module):
         self.encoder = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.IMAGENET1K_V1)
         self.encoder = self.encoder.to('cuda')
 
-        tensor_shape = (img_det1.shape[1], img_det1.shape[0], img_det1.shape[2])
-        self.img_det1, self.img_det2 = np.reshape(img_det1, tensor_shape), np.reshape(img_det2, tensor_shape)
+        tensor_shape = (img1.shape[1], img1.shape[0], img1.shape[2])
+        self.img_det1, self.img_det2 = np.reshape(img1, tensor_shape), np.reshape(img2, tensor_shape)
         self.img_det1, self.img_det2 = self.transform(self.img_det1), self.transform(self.img_det2)
 
         graph_nodes = get_graph_node_names(self.encoder)[0]
@@ -240,7 +244,9 @@ class BevImageFusion(nn.Module):
                                         self.roi)
 
         base_cloud, detail_cloud = Decomposer()(bev)
+        bev_color = cv2.cvtColor(bev_color, cv2.COLOR_RGB2HSV)
         base_img, detail_img = Decomposer()(bev_color)
+        bev_color = cv2.cvtColor(bev_color, cv2.COLOR_HSV2RGB)
 
         base_cloud = add_channel(base_cloud)
         detail_cloud = add_channel(detail_cloud)
@@ -265,11 +271,20 @@ class FrontImageFusion(nn.Module):
         self.intrinsic = params['intrinsic']
         self.extrinsic = params['extrinsic']
 
-    def forward(self, cloud, image):
+    def forward(self, cloud, image_):
+        image = image_.copy()
         front, colors = make_front_proj(cloud, self.width, self.height, self.intrinsic, self.extrinsic)
         base_cloud, detail_cloud = Decomposer()(front)
-        # base_img, detail_img = Decomposer()(image)
-        base_img, detail_img = Decomposer()(colors)
+        indices = np.argwhere(colors == 0)
+        image[indices[:, 0], indices[:, 1], indices[:, 2]] = 0
+
+        ## Get base and detail components of image
+        ## Probably need to convert to HSV
+        ## In HSV channels are independent from each other
+        image = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
+        base_img, detail_img = Decomposer()(image)
+        image = cv2.cvtColor(image, cv2.COLOR_HSV2RGB)
+
         base_cloud = add_channel(base_cloud)
         detail_cloud = add_channel(detail_cloud)
         fused_base = fuse_base(base_cloud, base_img)
