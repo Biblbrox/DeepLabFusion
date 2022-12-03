@@ -127,13 +127,6 @@ def test():
     front_fused_base = fused_front['fused_base']
     front_fused_detail = fused_front['fused_detail']
 
-    # map1 = orig_map1[0, :, :]
-    # map2 = orig_map2[0, :, :]
-
-    # for ch in range(1, orig_map1.shape[0]):
-    #    map1 += orig_map1[ch, :, :]
-    #    map2 += orig_map2[ch, :, :]
-
     print(f"Original image noise: {estimate_noise(img)}")
     print(f"Original front cloud noise: {estimate_noise(front)}")
     print(f"Fused base noise: {estimate_noise(front_fused_base)}")
@@ -146,8 +139,10 @@ def test():
     bev = fused_bev['bev']
     bev_color = fused_bev['bev_color']
 
-    dpi = 250
     path = "content/"
+
+    cv2.imwrite(f"{path}/kitti_image.png", cv2.cvtColor(255 * img, cv2.COLOR_RGB2BGR))
+
     sub = plt.subplot2grid(shape, (1, 0), colspan=3)
     sub.imshow(front[:, :, 0], cmap='gray')
     sub.set_title("Front view (Intensity channel)")

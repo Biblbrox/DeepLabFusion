@@ -8,6 +8,7 @@ import numpy as np
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
+
 class Model(nn.Module):
     def __init__(self, params):
         super(Model, self).__init__()
@@ -19,6 +20,6 @@ class Model(nn.Module):
         print(count_parameters(smp.Unet(encoder_name="mobilenet_v2")))
 
     def forward(self, cloud: np.array, img: np.array):
-        fused_front = self.fusion1(cloud, img)
-        fused_bev = self.fusion2(cloud, img)
+        fused_front = self.fusion1(cloud.copy(), img.copy())
+        fused_bev = self.fusion2(cloud.copy(), img.copy())
         return fused_front, fused_bev
