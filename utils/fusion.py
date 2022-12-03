@@ -53,7 +53,7 @@ class Decomposer:
 
         convx = signal.convolve2d(image, gx, boundary='symm', mode='same')
         convy = signal.convolve2d(image, gy, boundary='symm', mode='same')
-        conv = image + self.lam * (convx ** 2 + convy ** 2)
+        conv = self.lam * (convx ** 2 + convy ** 2)
         conv = to01(conv)
         return conv
 
@@ -76,12 +76,19 @@ class Decomposer:
         return base, detail
 
 
+def find_density_channel(cloud):
+    density = np.arrray([])
+
+    return density
+
+
 def add_channel(cloud_):
     cloud = np.zeros((cloud_.shape[0], cloud_.shape[1], 3), dtype=np.float32)
     cloud[:, :, 0] = cloud_[:, :, 0]
     cloud[:, :, 1] = cloud_[:, :, 1]
     cloud[:, :, 2] = np.maximum(cloud_[:, :, 0], cloud_[:, :, 1])
     cloud[:, :, 2] = to01(cloud[:, :, 2])
+    # cloud[:, :, 2] = 0
     return cloud
 
 
@@ -107,7 +114,7 @@ class DetailFusion(nn.Module):
         self.transform = torchvision.transforms.Compose([
             torchvision.transforms.ToTensor()
         ])
-        self.encoder = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.IMAGENET1K_V1)
+        self.encoder = models.mobilenet_v3_large(weights=models.MobileNet_V3_Large_Weights.IMAGENET1K_V1)
         self.encoder = self.encoder.to('cuda')
 
         tensor_shape = (img1.shape[1], img1.shape[0], img1.shape[2])
@@ -176,8 +183,8 @@ class DetailFusion(nn.Module):
             w2 = weight_map2.feature_map
             w2 = np.reshape(w2, (w2.shape[1], w2.shape[2], w2.shape[3]))
 
-            #print(w1.shape)
-            #print(self.np_img1.shape)
+            # print(w1.shape)
+            # print(self.np_img1.shape)
             # TODO: make more accurate multiplication
             # assert(w1.shape == self.np_img1.shape)
 
@@ -190,7 +197,6 @@ class DetailFusion(nn.Module):
             final_map = np.maximum(final_map, layer.feature_map)
 
         final_map = to01(final_map)
-        print(final_map.shape)
 
         return final_map
 
@@ -203,7 +209,7 @@ class DetailFusion(nn.Module):
 
         map1 = self.feature_extractor(input1)
         map2 = self.feature_extractor(input2)
-        #print(f"Before feature extractor: {input1}, after: {map1}")
+        # print(f"Before feature extractor: {input1}, after: {map1}")
 
         feature_maps1 = np.array([])
         feature_maps2 = np.array([])
@@ -244,9 +250,9 @@ class BevImageFusion(nn.Module):
                                         self.roi)
 
         base_cloud, detail_cloud = Decomposer()(bev)
-        bev_color = cv2.cvtColor(bev_color, cv2.COLOR_RGB2HSV)
+        # bev_color = cv2.cvtColor(bev_color, cv2.COLOR_RGB2HSV)
         base_img, detail_img = Decomposer()(bev_color)
-        bev_color = cv2.cvtColor(bev_color, cv2.COLOR_HSV2RGB)
+        # bev_color = cv2.cvtColor(bev_color, cv2.COLOR_HSV2RGB)
 
         base_cloud = add_channel(base_cloud)
         detail_cloud = add_channel(detail_cloud)
@@ -281,9 +287,9 @@ class FrontImageFusion(nn.Module):
         ## Get base and detail components of image
         ## Probably need to convert to HSV
         ## In HSV channels are independent from each other
-        image = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
+        # image = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
         base_img, detail_img = Decomposer()(image)
-        image = cv2.cvtColor(image, cv2.COLOR_HSV2RGB)
+        # image = cv2.cvtColor(image, cv2.COLOR_HSV2RGB)
 
         base_cloud = add_channel(base_cloud)
         detail_cloud = add_channel(detail_cloud)

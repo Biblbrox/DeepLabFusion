@@ -22,18 +22,13 @@ def np_to_o3d_cloud(np_cloud: np.array) -> o3d.t.geometry.PointCloud:
     device = o3d.core.Device("CPU:0")
     dtype = o3d.core.float32
 
-    intensity = np_cloud[:, 3].flatten()
+    intensity = np.c_[np_cloud[:, 3], np_cloud[:, 3], np_cloud[:, 3]]
     points = np_cloud[:, :3]
     cloud = o3d.t.geometry.PointCloud(device)
     cloud.point.positions = o3d.core.Tensor(np.asarray(points), dtype, device)
     cloud.point.intensities = o3d.core.Tensor(np.asarray(intensity), dtype, device)
 
-    intensity = cloud.point.intensities.numpy()
-    max_tot = np.max(intensity)
-    source_attribute = intensity / max_tot
-    colors_map = cm.get_cmap('jet', 256)
-    source_colors = colors_map(source_attribute)
-    cloud.point.colors = o3d.core.Tensor(np.asarray(source_colors[:, :3]), dtype)
+    cloud.point.colors = cloud.point.intensities
 
     return cloud
 
@@ -47,15 +42,59 @@ def o3d_rgbd_to_np(cloud: o3d.t.geometry.PointCloud):
 
 
 def make_front_proj(cloud: np.array, width, height, intrinsic, extrinsic) -> np.array:
-    projection: o3d.t.geometry.RGBDImage = np_to_o3d_cloud(cloud).project_to_rgbd_image(width, height, intrinsic, extrinsic,
-                                                              depth_max=10000)
+    projection: o3d.t.geometry.RGBDImage = np_to_o3d_cloud(cloud).project_to_rgbd_image(width, height, intrinsic,
+                                                                                        extrinsic,
+                                                                                        depth_max=10000, depth_scale=1)
     intensity = projection.color.as_tensor().numpy()
     depth = np.log(np.maximum(0.0000001, projection.depth.as_tensor().numpy()))
     front = np.zeros((depth.shape[0], depth.shape[1], 2), dtype=np.float32)
     front[:, :, 0] = intensity[:, :, 0]
     front[:, :, 1] = depth[:, :, 0]
 
-    return front,  projection.color.as_tensor().numpy()
+    return front, projection.color.as_tensor().numpy()
+
+
+def _make_front_proj(cloud, width, height, intrinsic, extrinsic):
+    x = cloud[:, 0]
+    y = cloud[:, 1]
+    z = cloud[:, 2]
+    intensity = cloud[:, 3]
+    ranges = np.sqrt(x ** 2 + y ** 2 + z ** 2)
+    fov_down = np.deg2rad(17.8)
+    fov_up = np.deg2rad(-2)
+
+    ## For every point in cloud
+    # Get Euler angles
+    pitch_values = np.arcsin(z / ranges)
+    yaw_values = np.arctan2(y, x)
+    # Normalizing and scaling
+    fov = fov_up + np.abs(fov_down)
+    normalized_pitch = height * (1 - (pitch_values + np.abs(fov_down)) / fov)
+    normalized_yaw = width * 0.5 * (yaw_values / np.pi + 1)
+
+    # Round and clamp for use as index
+    u_values = np.floor(normalized_pitch)
+    v_values = np.floor(normalized_yaw)
+
+    v_values = np.minimum(width - 1, v_values)
+    v_values = np.maximum(0.0, v_values)
+
+    u_values = np.minimum(height - 1, u_values)
+    u_values = np.maximum(0.0, u_values)
+
+    # Get image coordinates
+    u_values = np.floor(u_values)
+    v_values = np.floor(v_values)
+    u_values = u_values.astype(np.int)
+    v_values = v_values.astype(np.int)
+
+    ## Build image from u, v
+    image = np.zeros([height, width, 1], dtype=np.uint8)
+    old_max = np.max(x)
+    old_min = np.min(x)
+    for i in range(np.size(u_values)):
+        image[u_values[i], v_values[i]] = image_utils.normalize(old_min, old_max, 0, 255, x[i])  # * 255
+        image[u_values[i], v_values[i]] = intensity[i] * 255
 
 
 def transform_cloud(cloud, transform):
@@ -100,7 +139,6 @@ def project_to_image(image: np.array, cloud: np.array, projection_mat: np.array,
     cloud = np.delete(cloud, 1, 0)
     projection = np.zeros(image.shape)
     u, v, depth = cam2image(cloud, [])
-
 
     return projection
 
