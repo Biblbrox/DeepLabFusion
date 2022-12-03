@@ -17,7 +17,6 @@ class Model(nn.Module):
                                    projection='front')
         self.fusion2 = FusionLayer(params=self.params,
                                    projection='bev')
-        print(count_parameters(smp.Unet(encoder_name="mobilenet_v2")))
 
     def forward(self, cloud: np.array, img: np.array):
         fused_front = self.fusion1(cloud.copy(), img.copy())
