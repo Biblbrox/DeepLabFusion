@@ -1,8 +1,9 @@
 import cv2
+import numpy as np
 
 
 def load_image(path):
-    img = cv2.imread(path)
+    img = cv2.imread(path).astype(np.float32) / 255
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     return img
 
