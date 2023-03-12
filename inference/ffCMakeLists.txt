@@ -1,0 +1,53 @@
+cmake_minimum_required(VERSION 3.10)
+
+set(PROJECT_NAME LidarDetectionInference)
+
+project(${PROJECT_NAME} VERSION 0.0.1 LANGUAGES CXX C)
+
+set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/thirty_party)
+set(CMAKE_INSTALL_RPATH ".")
+set(CMAKE_BUILD_WITH_INSTALL_RPATH true)
+
+# Prevent build in out of source
+file(TO_CMAKE_PATH "${PROJECT_BINARY_DIR}/CMakeLists.txt" LOC_PATH)
+if (EXISTS "${LOC_PATH}")
+    message(FATAL_ERROR "You cannot build in a source directory (or any directory with a CMakeLists.txt file). Please make a build subdirectory. Feel free to remove CMakeCache.txt and CMakeFiles.")
+endif ()
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CUDA_STANDARD 14)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
+set(CMAKE_AUTOUIC ON)
+
+set(DEBUG_FLAGS "-g -O0 -rdynamic -Wall -Wall -Wextra --exceptions")
+set(RELEASE_FLAGS "-O3 -Wall -Wall -Wextra --exceptions")
+
+set(CMAKE_CXX_FLAGS ${RELEASE_FLAGS})
+set(CMAKE_CXX_FLAGS_DEBUG_INIT ${DEBUG_FLAGS})
+set(CMAKE_CXX_FLAGS_RELEASE_INIT ${RELEASE_FLAGS})
+
+FILE(GLOB_RECURSE CPP RELATIVE ${CMAKE_SOURCE_DIR} "src/*.cpp" "src/*.ui")
+FILE(GLOB_RECURSE HPP RELATIVE ${CMAKE_SOURCE_DIR} "include/*.hpp" "include/*.h")
+
+set(HPP ${HPP})
+set(CPP ${CPP} input/PointCloudReader.hpp input/SimulateCloudSource.cpp input/SimulateCloudSource.hpp input/StereoCloudSource.cpp input/PointCloudReader.cpp)
+
+set(CMAKE_INCLUDE_CURRENT_DIR ON)
+
+add_compile_options(-fdebug-prefix-map="${CMAKE_SOURCE_DIR}"=.)
+add_compile_options(-fdebug-prefix-map="${CMAKE_BINARY_DIR}"=.)
+
+# Make target Project
+add_executable(${PROJECT_NAME} ${HPP} ${CPP} ${UI} ${resources})
+
+# Load libs
+include(ffCMakeFindLibs.txt)
+
+########################################################################################################################
+set(PROJECT_OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR})
+set(PROJECT_INCLUDE_DIR ${PROJECT_OUTPUT_DIR}/include)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+include(CMakeLinkLibs.txt)

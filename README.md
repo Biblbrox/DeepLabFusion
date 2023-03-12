@@ -12,15 +12,15 @@ Below I provide example for sample image from KITTI dataset:
 
 Original image
 
-![](content/kitti_image.png?raw=true)
+![](analyzing/content/kitti_image.png?raw=true)
 
 Base component
 
-![](content/image_base.png)
+![](analyzing/content/image_base.png)
 
 Detail component
 
-![](content/image_detail.png)
+![](analyzing/content/image_detail.png)
 
 
 Next, the same decomposition applied to front and bev point cloud projections. The sample point cloud also taken
@@ -28,25 +28,25 @@ from KITTI dataset and contains four components: X, Y, Z, I, where I is intensit
 
 Front projection (Intensity channel):
 
-![](content/front_intensity.png?raw=true)
+![](analyzing/content/front_intensity.png?raw=true)
 
 Front projection (Deep channel):
 
-![](content/front_depth.png?raw=true)
+![](analyzing/content/front_depth.png?raw=true)
 
 For bird's eye view projection we need obtain colored projected point cloud in order to fuse with ordinary cloud.
 
 RGB bird's eye view:
 
-![](content/bev_colors.png?raw=true)
+![](analyzing/content/bev_colors.png?raw=true)
 
 BEV (Height channel):
 
-![](content/bev_height.png?raw=true)
+![](analyzing/content/bev_height.png?raw=true)
 
 BEV (Intensity channel):
 
-![](content/bev_intensity.png?raw=true)
+![](analyzing/content/bev_intensity.png?raw=true)
 
 # Decomposition
 
@@ -61,11 +61,11 @@ According to cited paper, base decomposition contains two equations:
 
 Front fusion (Base part):
 
-![](content/front_fused_with_image_base.png?raw=true)
+![](analyzing/content/front_fused_with_image_base.png?raw=true)
 
 Bev fusion (base part):
 
-![](content/bev_fused_with_image_base.png?raw=true)
+![](analyzing/content/bev_fused_with_image_base.png?raw=true)
 
 ## Detail decomposition
 In order to fuse with detail components we need 
@@ -73,12 +73,12 @@ to use fusion subnetwork with technique named in original paper as multilayer fu
 obtain realtime performance, VGG-19 Network replaced with MobileNet/V2/V3. There are the good explanation
 of this method in original paper for infrared and visible cameras.
 
-![](content/readme/fusion_network.png)
+![](analyzing/content/readme/fusion_network.png)
 
 Front fusion (Detail part):
 
-![](content/front_fused_with_image_detail.png?raw=true)
+![](analyzing/content/front_fused_with_image_detail.png?raw=true)
 
 Bev fusion (Detail part):
 
-![](content/bev_fused_with_image_detail.png?raw=true)
+![](analyzing/content/bev_fused_with_image_detail.png?raw=true)

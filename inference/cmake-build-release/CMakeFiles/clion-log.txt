@@ -1,0 +1,11 @@
+/home/biblbrox/clion-2020.3/bin/cmake/linux/bin/cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_MAKE_PROGRAM=/home/biblbrox/clion-2020.3/bin/ninja/linux/ninja -G Ninja -S /home/biblbrox/Projects/DeepLabFusionSegmentation/inference -B /home/biblbrox/Projects/DeepLabFusionSegmentation/inference/cmake-build-release
+Configuring cuda
+-- CUDA 10.2 detected (x86_64), enabling SM_53 SM_62
+-- CUDA 10.2 detected (x86_64), enabling SM_72
+TensorRT is available!
+NVINFER: /usr/lib/x86_64-linux-gnu/libnvinfer.so
+NVPARSERS: /usr/lib/x86_64-linux-gnu/libnvparsers.so
+NVONNXPARSERS: /usr/lib/x86_64-linux-gnu/libnvonnxparser.so
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/biblbrox/Projects/DeepLabFusionSegmentation/inference/cmake-build-release
