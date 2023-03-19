@@ -11,18 +11,20 @@
 #include <tf2_ros/message_filter.h>
 #include <tf2_ros/transform_listener.h>
 
+#include "PointCloudReader.hpp"
 #include "core/base.hpp"
 
 BEGIN_NAMESPACE
 
+enum class CloudSource { simulation_lidar, stereo, lidar };
+
 class PointCloudReaderNode : public rclcpp::Node {
 public:
-  PointCloudReaderNode();
-
+  explicit PointCloudReaderNode(CloudSource sourceType);
 private:
-  void topicCallback(const sensor_msgs::msg::LaserScan::ConstPtr &scan,
-                     const rclcpp::MessageInfo &info) const;
-  rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr m_subscription;
+  std::shared_ptr<PointCloudReader> m_cloudReader;
+  std::shared_ptr<rclcpp::Publisher<sensor_msgs::msg::PointCloud2>> m_publisher;
+  CloudSource m_cloudSource;
 };
 
 END_NAMESPACE

@@ -1,6 +1,0 @@
-# ninja log v5
-0	18	1676670332490227542	LidarDetectionInference_autogen/mocs_compilation.cpp	eab961f7da0471c9
-18	32	1676670332506227564	CMakeFiles/LidarDetectionInference.dir/LidarDetectionInference_autogen/mocs_compilation.cpp.o	2c2412bca4dfa600
-0	18	1676670332490227542	/home/biblbrox/Projects/DeepLabFusionSegmentation/inference/cmake-build-debug/LidarDetectionInference_autogen/timestamp	eab961f7da0471c9
-0	18	1676670332490227542	LidarDetectionInference_autogen/timestamp	eab961f7da0471c9
-0	18	1676670332490227542	/home/biblbrox/Projects/DeepLabFusionSegmentation/inference/cmake-build-debug/LidarDetectionInference_autogen/mocs_compilation.cpp	eab961f7da0471c9
